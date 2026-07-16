@@ -87,6 +87,11 @@ financial_grouped = (
     financial.groupby("id")[month_columns].sum().reset_index()
 )
 
+# Дедублицируем prolongations по id+month (оставляем первую запись).
+# В данных есть технические дубли (одинаковый AM дважды: id 600, 682, 697)
+# и один конфликт AM (id 361: Смирнова vs Попова → берём первую запись, Смирнову).
+prolongations = prolongations.drop_duplicates(subset=["id", "month"], keep="first")
+
 # Объединяем с prolongations (AM из prolongations — первичен)
 projects = (
     prolongations[["id", "month", "AM"]]
