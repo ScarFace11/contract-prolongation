@@ -1,0 +1,486 @@
+# Работа с данными
+import pandas as pd
+import numpy as np
+
+# Работа с датами
+from datetime import datetime
+
+# Визуализация
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Excel
+from openpyxl import load_workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.chart import BarChart, LineChart, Reference
+
+prolongations = pd.read_csv(
+    "prolongations.csv",
+    sep=None,
+    engine="python",
+    encoding="utf-8-sig"
+)
+
+
+financial = pd.read_csv(
+    "financial_data.csv",
+    sep=None,
+    engine="python",
+    encoding="utf-8-sig"
+)
+
+
+
+months_column = {
+    1:"Январь",
+    2:"Февраль",
+    3:"Март",
+    4:"Апрель",
+    5:"Май",
+    6:"Июнь",
+    7:"Июль",
+    8:"Август",
+    9:"Сентябрь",
+    10:"Октябрь",
+    11:"Ноябрь",
+    12:"Декабрь"
+}
+months_parse = {
+    "январь": 1,
+    "февраль": 2,
+    "март": 3,
+    "апрель": 4,
+    "май": 5,
+    "июнь": 6,
+    "июль": 7,
+    "август": 8,
+    "сентябрь": 9,
+    "октябрь": 10,
+    "ноябрь": 11,
+    "декабрь": 12
+}
+def parse_month(value):
+    month, year = value.lower().split()
+
+    return pd.Timestamp(
+        year=int(year),
+        month=months_parse[month],
+        day=1
+    )
+
+
+prolongations["month"] = (
+    prolongations["month"]
+    .apply(parse_month)
+)
+
+def month_column(date):
+
+    return f"{months_column[date.month]} {date.year}"
+
+
+
+
+financial["id"] = financial["id"].astype(str)
+prolongations["id"] = prolongations["id"].astype(str)
+
+month_columns = [
+    col for col in financial.columns
+    if col not in [
+        "id",
+        "Причина дубля",
+        "Account"
+    ]
+]
+
+def money_to_float(value):
+
+    if pd.isna(value):
+        return 0
+
+    if isinstance(value, str):
+
+        value = (
+            value
+            .replace("\xa0", "")
+            .replace(" ", "")
+            .replace(",", ".")
+        )
+
+        try:
+            return float(value)
+
+        except:
+            return 0
+
+    return value
+
+
+
+for col in month_columns:
+
+    financial[col] = (
+        financial[col]
+        .apply(money_to_float)
+    )
+
+financial_grouped = (
+    financial
+    .groupby("id")[month_columns]
+    .sum()
+    .reset_index()
+)
+
+financial_grouped.head()
+
+projects = (
+    prolongations[
+        ["id","month","AM"]
+    ]
+    .merge(
+        financial_grouped,
+        on="id",
+        how="left"
+    )
+)
+projects["AM"] = (
+    projects["AM"]
+    .fillna("Не указан")
+)
+
+projects.head()
+
+
+
+def calculate_manager_kpi(
+        data,
+        report_month
+):
+    result = []
+
+    current = pd.Timestamp(report_month)
+
+    # месяц назад
+    previous = current - pd.DateOffset(months=1)
+
+    # два месяца назад
+    two_month = current - pd.DateOffset(months=2)
+
+
+    current_col = month_column(current)
+    previous_col = month_column(previous)
+    two_month_col = month_column(two_month)
+
+    if current_col not in month_columns:
+        return pd.DataFrame()
+
+    for manager, df in data.groupby("AM"):
+        # ------------------------
+        # Первый месяц
+        # ------------------------
+
+        first_month_projects = df[
+            df["month"] == previous
+            ]
+
+        first_denominator = (
+            first_month_projects[
+                previous_col
+            ].sum()
+        )
+
+        first_numerator = (
+            first_month_projects[
+                current_col
+            ].sum()
+        )
+
+        coef_first = (
+            first_numerator /
+            first_denominator
+            if first_denominator > 0
+            else 0
+        )
+
+        # ------------------------
+        # Второй месяц
+        # ------------------------
+
+        second_month_projects = df[
+            df["month"] == two_month
+            ]
+
+        not_extended_first = (
+                second_month_projects[
+                    previous_col
+                ] == 0
+        )
+
+        denominator_projects = (
+            second_month_projects[
+                not_extended_first
+            ]
+        )
+
+        denominator_second = (
+            denominator_projects[
+                two_month_col
+            ].sum()
+        )
+
+        numerator_second = (
+            denominator_projects[
+                current_col
+            ].sum()
+        )
+
+        coef_second = (
+            numerator_second /
+            denominator_second
+            if denominator_second > 0
+            else 0
+        )
+
+        result.append({
+
+            "Менеджер": manager,
+
+            "Месяц":
+                current.strftime("%Y-%m"),
+
+            "1 месяц база":
+                first_denominator,
+
+            "1 месяц продлено":
+                first_numerator,
+
+            "Коэффициент 1 месяц":
+                coef_first,
+
+            "2 месяц база":
+                denominator_second,
+
+            "2 месяц продлено":
+                numerator_second,
+
+            "Коэффициент 2 месяц":
+                coef_second
+
+        })
+
+    return pd.DataFrame(result)
+
+all_results=[]
+
+
+for month in pd.date_range(
+    "2023-01-01",
+    "2023-12-01",
+    freq="MS"
+):
+
+    temp = calculate_manager_kpi(
+        projects,
+        month
+    )
+
+    all_results.append(temp)
+
+
+
+kpi_monthly = pd.concat(
+    all_results,
+    ignore_index=True
+)
+
+
+
+kpi_monthly.head()
+
+department = (
+    kpi_monthly
+    .groupby("Месяц")
+    .agg({
+
+        "1 месяц база":"sum",
+        "1 месяц продлено":"sum",
+
+        "2 месяц база":"sum",
+        "2 месяц продлено":"sum"
+
+    })
+    .reset_index()
+)
+
+
+
+department["Коэффициент 1 месяц"] = np.where(
+    department["1 месяц база"] > 0,
+    department["1 месяц продлено"] /
+    department["1 месяц база"],
+    0
+)
+
+
+department["Коэффициент 2 месяц"] = np.where(
+    department["2 месяц база"] > 0,
+    department["2 месяц продлено"] /
+    department["2 месяц база"],
+    0
+)
+
+
+year_manager = (
+    kpi_monthly
+    .groupby("Менеджер")
+    .agg({
+
+        "1 месяц база":"sum",
+        "1 месяц продлено":"sum",
+
+        "2 месяц база":"sum",
+        "2 месяц продлено":"sum"
+
+    })
+    .reset_index()
+)
+
+
+
+year_manager["Коэффициент 1 месяц"] = np.where(
+    year_manager["1 месяц база"] > 0,
+    year_manager["1 месяц продлено"] /
+    year_manager["1 месяц база"],
+    np.nan
+)
+
+
+year_manager["Коэффициент 2 месяц"] = np.where(
+    year_manager["2 месяц база"] > 0,
+    year_manager["2 месяц продлено"] /
+    year_manager["2 месяц база"],
+    np.nan
+)
+
+
+file_name="prolongation_report.xlsx"
+
+for df in [
+    department,
+    kpi_monthly,
+    year_manager
+]:
+
+    for col in [
+        "Коэффициент 1 месяц",
+        "Коэффициент 2 месяц"
+    ]:
+
+        df[col] = df[col].apply(
+            lambda x: f"{x:.1%}"
+        )
+
+with pd.ExcelWriter(
+    file_name,
+    engine="openpyxl"
+) as writer:
+
+
+    department.to_excel(
+        writer,
+        sheet_name="Department",
+        index=False
+    )
+
+
+    kpi_monthly.to_excel(
+        writer,
+        sheet_name="Managers",
+        index=False
+    )
+
+
+    year_manager.to_excel(
+        writer,
+        sheet_name="Year KPI",
+        index=False
+    )
+
+    year_manager.fillna(
+        "Нет данных",
+        inplace=True
+    )
+wb = load_workbook(file_name)
+
+
+for ws in wb:
+
+    for cell in ws[1]:
+
+        cell.font = Font(
+            bold=True
+        )
+
+        cell.fill = PatternFill(
+            "solid",
+            fgColor="DDDDDD"
+        )
+
+        cell.alignment = Alignment(
+            horizontal="center"
+        )
+
+
+    for column in ws.columns:
+
+        max_length=max(
+            len(str(cell.value))
+            if cell.value
+            else 0
+            for cell in column
+        )
+
+
+        ws.column_dimensions[
+            column[0].column_letter
+        ].width=max_length+3
+
+
+
+wb.save(file_name)
+
+plt.figure(figsize=(12,5))
+
+
+sns.lineplot(
+    data=department,
+    x="Месяц",
+    y="Коэффициент 1 месяц",
+    marker="o",
+    label="1 месяц"
+)
+
+
+sns.lineplot(
+    data=department,
+    x="Месяц",
+    y="Коэффициент 2 месяц",
+    marker="o",
+    label="2 месяц"
+)
+
+
+plt.title(
+    "Динамика коэффициентов пролонгации"
+)
+
+
+plt.xticks(rotation=45)
+
+plt.grid()
+
+plt.savefig(
+    "prolongation_chart.png",
+    dpi=300,
+    bbox_inches="tight"
+)
