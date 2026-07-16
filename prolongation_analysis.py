@@ -198,6 +198,20 @@ year_manager["Коэффициент 2"] = np.where(
     year_manager["к пролонгации 2"] > 0,
     year_manager["пролонгировано 2"] / year_manager["к пролонгации 2"], np.nan)
 
+# Весь отдел за год (одна итоговая строка)
+dept_k1_sum = department["к пролонгации 1"].sum()
+dept_p1_sum = department["пролонгировано 1"].sum()
+dept_k2_sum = department["к пролонгации 2"].sum()
+dept_p2_sum = department["пролонгировано 2"].sum()
+department_year = {
+    "к пролонгации 1":  dept_k1_sum,
+    "пролонгировано 1": dept_p1_sum,
+    "Коэффициент 1":    dept_p1_sum / dept_k1_sum if dept_k1_sum > 0 else 0.0,
+    "к пролонгации 2":  dept_k2_sum,
+    "пролонгировано 2": dept_p2_sum,
+    "Коэффициент 2":    dept_p2_sum / dept_k2_sum if dept_k2_sum > 0 else 0.0,
+}
+
 # Pivot: менеджер × месяц для каждого коэффициента
 pivot_coef1 = (
     kpi_monthly.pivot_table(
@@ -433,7 +447,7 @@ def write_summary_block(ws, start_row, title, first_col, rows_data):
 
     return start_row + 3 + len(rows_data)
 
-# Блок 1: Весь отдел по месяцам
+# ── Блок 1: Весь отдел по месяцам + строка «Итого за 2023 год» ──────────────
 next_r = write_summary_block(
     ws_sum, 1,
     "Весь отдел — по месяцам", "Месяц",
@@ -443,10 +457,28 @@ next_r = write_summary_block(
      for _, r in department.iterrows()]
 )
 
-# Разделитель между блоками
-next_r += 1
+# Строка «Итого за 2023 год» — жирная, тёмно-жёлтая
+C_TOTAL = "FFD966"
+dy = department_year
+for col_idx, value in enumerate([
+    "Итого за 2023 год",
+    fmt_money(dy["к пролонгации 1"]),
+    fmt_money(dy["пролонгировано 1"]),
+    fmt_pct(dy["Коэффициент 1"]),
+    fmt_money(dy["к пролонгации 2"]),
+    fmt_money(dy["пролонгировано 2"]),
+    fmt_pct(dy["Коэффициент 2"]),
+], start=1):
+    cell = ws_sum.cell(row=next_r, column=col_idx, value=value)
+    cell.font      = Font(bold=True, size=10)
+    cell.fill      = PatternFill("solid", fgColor=C_TOTAL)
+    cell.alignment = Alignment(horizontal="center", vertical="center")
+    cell.border    = thin_border()
 
-# Блок 2: Менеджеры за год
+# Разделитель между блоками
+next_r += 2
+
+# ── Блок 2: Менеджеры за год ──────────────────────────────────────────────────
 next_r = write_summary_block(
     ws_sum, next_r,
     "Менеджеры — итог за 2023 год", "Менеджер",
@@ -456,7 +488,7 @@ next_r = write_summary_block(
      for _, r in year_manager.iterrows()]
 )
 
-# Пустые строки под место для графика (вставите вручную)
+# Подсказка для вставки графика
 next_r += 1
 ws_sum.cell(row=next_r, column=1).value = "← Вставьте график здесь"
 ws_sum.cell(row=next_r, column=1).font = Font(italic=True, color="999999", size=10)
