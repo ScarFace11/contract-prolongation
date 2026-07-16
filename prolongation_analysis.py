@@ -392,6 +392,77 @@ next_row += 1   # пустая строка-разделитель
 write_pivot_block(ws_mon, next_row, pivot_coef2, "Коэффициент 2", "Коэффициент 2")
 autowidth(ws_mon, min_width=10)
 
+# ── Лист 4: Итоги — сводка для руководителя ──────────────────────────────────
+# Два блока на одном листе: отдел по месяцам + менеджеры за год.
+# Место для графика оставляется ниже (пустые строки).
+ws_sum = wb.create_sheet("Итоги", 0)   # первым листом
+
+C_TITLE = "F4B942"   # оранжево-жёлтый для заголовков блоков
+
+def write_summary_block(ws, start_row, title, first_col, rows_data):
+    """
+    Записывает один сводный блок:
+      start_row   : строка с названием блока (merged на всю ширину = 7 столбцов)
+      start_row+1 : двухстрочная шапка (такая же как на остальных листах)
+      start_row+2+: данные
+    Возвращает номер следующей свободной строки.
+    """
+    # Заголовок блока
+    hcell(ws, start_row, 1, title, bg=C_TITLE, merge_end_col=7)
+    ws.row_dimensions[start_row].height = 24
+
+    # Стандартная двухстрочная шапка
+    hcell(ws, start_row + 1, 1, first_col, bg=C_HEADER, merge_end_row=start_row + 2)
+    hcell(ws, start_row + 1, 2, "Пролонгации в первый месяц", bg=C_GROUP, merge_end_col=4)
+    hcell(ws, start_row + 1, 5, "Пролонгации через месяц",    bg=C_GROUP, merge_end_col=7)
+    for col, name in [(2, "к пролонгации"), (3, "пролонгировано"), (4, "Коэффициент"),
+                      (5, "к пролонгации"), (6, "пролонгировано"), (7, "Коэффициент")]:
+        hcell(ws, start_row + 2, col, name, bg=C_HEADER)
+    ws.row_dimensions[start_row + 1].height = 26
+    ws.row_dimensions[start_row + 2].height = 26
+
+    # Данные
+    for i, (label, k1, p1, c1, k2, p2, c2) in enumerate(rows_data, start=start_row + 3):
+        dcell(ws, i, 1, label)
+        dcell(ws, i, 2, fmt_money(k1))
+        dcell(ws, i, 3, fmt_money(p1))
+        dcell(ws, i, 4, fmt_pct(c1))
+        dcell(ws, i, 5, fmt_money(k2))
+        dcell(ws, i, 6, fmt_money(p2))
+        dcell(ws, i, 7, fmt_pct(c2))
+
+    return start_row + 3 + len(rows_data)
+
+# Блок 1: Весь отдел по месяцам
+next_r = write_summary_block(
+    ws_sum, 1,
+    "Весь отдел — по месяцам", "Месяц",
+    [(r["Месяц"],
+      r["к пролонгации 1"], r["пролонгировано 1"], r["Коэффициент 1"],
+      r["к пролонгации 2"], r["пролонгировано 2"], r["Коэффициент 2"])
+     for _, r in department.iterrows()]
+)
+
+# Разделитель между блоками
+next_r += 1
+
+# Блок 2: Менеджеры за год
+next_r = write_summary_block(
+    ws_sum, next_r,
+    "Менеджеры — итог за 2023 год", "Менеджер",
+    [(r["Менеджер"],
+      r["к пролонгации 1"], r["пролонгировано 1"], r["Коэффициент 1"],
+      r["к пролонгации 2"], r["пролонгировано 2"], r["Коэффициент 2"])
+     for _, r in year_manager.iterrows()]
+)
+
+# Пустые строки под место для графика (вставите вручную)
+next_r += 1
+ws_sum.cell(row=next_r, column=1).value = "← Вставьте график здесь"
+ws_sum.cell(row=next_r, column=1).font = Font(italic=True, color="999999", size=10)
+
+autowidth(ws_sum)
+
 # ─────────────────────────────────────────────────────────────────────────────
 file_name = "prolongation_report.xlsx"
 wb.save(file_name)
