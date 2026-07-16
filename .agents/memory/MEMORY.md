@@ -1,0 +1,1 @@
+- [GitHub preference](github-preference.md) — все файлы пушить в репозиторий ScarFace11/contract-prolongation на GitHub
