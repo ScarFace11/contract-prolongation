@@ -12,3 +12,9 @@ id = "MPNp17dvxuXBbWoTPwW0P"
 uri = "file://prolongation_chart.png"
 type = "image"
 title = "График коэффициентов пролонгации"
+
+[[outputs]]
+id = "dnH2MN4A9mpQJo4eTyBFI"
+uri = "file://prolongation_analysis.py"
+type = "unspecified"
+title = "Код анализа пролонгаций"
