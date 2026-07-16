@@ -1,0 +1,14 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "MB1vG7hts8NQ6qkVXv-DJ"
+uri = "file://prolongation_report.xlsx"
+type = "table"
+title = "Отчёт по пролонгациям (Excel)"
+
+[[outputs]]
+id = "MPNp17dvxuXBbWoTPwW0P"
+uri = "file://prolongation_chart.png"
+type = "image"
+title = "График коэффициентов пролонгации"
