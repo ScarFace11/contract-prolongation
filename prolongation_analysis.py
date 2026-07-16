@@ -133,7 +133,9 @@ def calculate_manager_kpi(data, report_month):
         first_proj   = df[df["month"] == previous]
         denom1       = first_proj[previous_col].sum()
         numer1       = first_proj[current_col].sum()
-        coef1        = numer1 / denom1 if denom1 > 0 else 0.0
+        # np.nan если у менеджера не было завершившихся проектов в этом месяце
+        # (0.0 означало бы «пролонгировал 0%» — неверный сигнал для руководителя)
+        coef1        = numer1 / denom1 if denom1 > 0 else np.nan
 
         # ── Коэффициент 2 ─────────────────────────────────────────────────
         second_proj  = df[df["month"] == two_month]
@@ -141,7 +143,8 @@ def calculate_manager_kpi(data, report_month):
         denom_proj   = second_proj[not_extended]
         denom2       = denom_proj[two_month_col].sum()
         numer2       = denom_proj[current_col].sum()
-        coef2        = numer2 / denom2 if denom2 > 0 else 0.0
+        # np.nan если нет непродлённых проектов из позапрошлого месяца
+        coef2        = numer2 / denom2 if denom2 > 0 else np.nan
 
         result.append({
             "Менеджер":            manager,
